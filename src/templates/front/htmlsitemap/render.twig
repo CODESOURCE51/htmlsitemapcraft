@@ -1,0 +1,26 @@
+{% macro line(params) %}
+    <ul class="list">
+        {% for item in params %}
+            {% if item.element_type == 'custom' %}
+                <li class="list-item">
+                    {% if item.url %}
+                        <a class="link" href="{{ item.url }}">{{ item.label }}</a>
+                    {% else %}
+                        <span class="link">{{ item.label }}</span>
+                    {% endif %}
+                    {{ _self.line(item.children ?? []) }}
+                </li>
+            {% elseif item.element %}
+                <li class="list-item" data-id="{{ item.element.id }}">
+                    <a class="link" href="{{ item.element.url }}">{{ item.element.title }}</a>
+                    {{ _self.line(item.children ?? []) }}
+                </li>
+            {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endmacro %}
+
+<div class="sitemaps">
+    {{ _self.line(sitemaps) }}
+</div>

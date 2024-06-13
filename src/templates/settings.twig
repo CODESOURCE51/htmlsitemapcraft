@@ -1,0 +1,25 @@
+{% import "_includes/forms" as forms %}
+
+{% set sections = settings.sections %}
+{% set groups = settings.categoryGroups %}
+
+<p class="first">Anything checked here will be ignored in the sitemap. Rebuild the sitemap after you've changed something, <a href="{{ url('sitemaps/utilities') }}">here</a></p>
+<div class="flex" style="align-items: baseline;">
+    <input name="ignored" type="hidden" value="">
+    {{ forms.checkboxselectField({
+        label: 'Ignore sections'|t('htmlsitemap'),
+        name: 'ignored',
+        values: settings.ignored,
+        options: sections,
+        size: sections|length < 5 ? 5 : sections|length
+        }) 
+    }}
+    {{ forms.checkboxselectField({
+        label: 'Ignore category groups'|t('htmlsitemap'),
+        name: 'ignored',
+        values: settings.ignored,
+        options: groups,
+        size: groups|length < 5 ? 5 : groups|length
+        }) 
+    }}
+</div>

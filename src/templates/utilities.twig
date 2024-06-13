@@ -1,0 +1,39 @@
+{% extends "_layouts/cp" %}
+{% import "_includes/forms" as forms %}
+
+{% set title = 'Sitemap settings'|t('htmlsitemap') %}
+{% set selectedSubnavItem = 'rp-utilities' %}
+
+{% block content %}
+    <h2>{{ 'Reinstall'|t('themes') }}</h2>
+    <p>{{ 'Re-install sitemaps in case of errors, this will add missing elements and delete orphans' }}</p>
+    <button href="{{ url('sitemaps/reinstall') }}" class="btn submit install">{{ 'Re-install'|t('themes') }}</button>
+{% endblock %}
+
+{% js on ready %}
+function install(btn) {
+    btn.attr('disabled', true);
+    btn.next().show();
+    $.ajax({
+        method: 'post',
+        url: btn.attr('href'), 
+        dataType: 'json',
+        headers: {
+            'X-CSRF-Token': Craft.csrfTokenValue
+        }
+    }).done((res) => {
+        Craft.cp.displayNotice(res.message);
+    }).fail((res) => {
+        Craft.cp.displayError(res.responseJSON.error);
+    }).always(() => {
+        btn.attr('disabled', false);
+    })
+}
+
+$(function() { 
+    $('.install').click(function (e) {
+        e.preventDefault();
+        install($(this));
+    });
+});
+{% endjs %}

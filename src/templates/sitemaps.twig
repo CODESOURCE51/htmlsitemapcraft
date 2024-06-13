@@ -1,0 +1,253 @@
+{% extends "_layouts/cp" %}
+
+{% import "_includes/forms" as forms %}
+
+{% set title = 'Sitemap'|t('htmlsitemap') %}
+{% set fullPageForm = true %}
+{% set mainFormAttributes = {action: 'sitemaps/save'} %}
+
+{% block content %}
+    {% macro line(params) %}
+        <div class="list">
+            {% for item in params %}
+                <div class="list-item" data-id="{{ item.id }}" data-label="{{ item.label }}" data-url="{{ item.url }}">
+                    <span class="icon move"></span>
+                    {% if item.element_type == 'custom' %}
+                        {% if item.url %}
+                            <a class="link" href="{{ item.url }}" target="_blank">{{ item.label }}</a>
+                        {% else %}
+                            <span class="link">{{ item.label }}</span>
+                        {% endif %}
+                        <div class="ignore">
+                            <a href="#" class="js-delete">Delete</a>
+                            <a href="#" class="js-edit">Edit</a>
+                            <label for="ignore-{{ item.id }}">Ignore</label>
+                            <input type="checkbox" id="ignore-{{ item.id }}" {{ item.ignore ? 'checked' : '' }}>
+                        </div>
+                    {% elseif not item.element %}
+                        <span class='error'>
+                            Element is missing, please rebuild the sitemaps <a href="{{ url('sitemaps/utilities') }}">there</a>
+                        </span>
+                        <div class="ignore">
+                            <label for="ignore-{{ item.id }}">Ignore</label>
+                            <input type="checkbox" id="ignore-{{ item.id }}" {{ item.ignore ? 'checked' : '' }}>
+                        </div>
+                    {% else %}
+                        <span>
+                            <a class="link" href="{{ item.element.url }}" target="_blank">{{ item.element.title }}</a>
+                            {% if item.type_title %}<span>({{ item.type_title }})</span>{% endif %}
+                        </span>
+                        <div class="ignore">
+                            <label for="ignore-{{ item.id }}">Ignore</label>
+                            <input type="checkbox" id="ignore-{{ item.id }}" {{ item.ignore ? 'checked' : '' }}>
+                        </div>
+                    {% endif %}
+                    {{ _self.line(item.children ?? []) }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endmacro %}
+
+    <div class="flex sitemap-header">
+        <p>Reorganise elements by dragging them. New pages will append to the end of that list automatically.</p>
+        <a href="#" class="btn js-add">Add custom</a>
+    </div>
+
+    <input name="sitemaps" type="hidden" class="sitemap-input"/>
+    <div class="sitemaps">
+        {{ _self.line(sitemaps) }}
+    </div>
+    <div class="modal custom-modal" style="display:none">
+        <div class="header">
+            <h3>Add custom</h3>
+        </div>
+        <form action="?">
+            <input type="hidden" name="id">
+            <div class="body flex">
+                <div class="field">
+                    <label class="heading required">Label</label>
+                    <div class="input">
+                        <input type="text" class="text" name="label">
+                    </div>
+                </div>
+                <div class="field">
+                    <label class="heading">Url</label>
+                    <div class="input">
+                        <input type="text" class="text" name="url">
+                    </div>
+                </div>
+            </div>
+            <div class="footer">
+                <div class="buttons right">
+                    <button type="button" class="btn cancel">Cancel</button>
+                    <button type="button" class="btn submit">Save</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="list-item skeleton" style="display:none">
+        <span class="icon move"></span>
+        <span class="link"></span>
+        <div class="ignore">
+            <a href="#" class="js-delete">Delete</a>
+            <a href="#" class="js-edit">Edit</a>
+            <label>Ignore</label>
+            <input type="checkbox">
+        </div>
+        <div class="list"></div>
+    </div>
+{% endblock %}
+
+{% js %}
+    var Sitemap = {};
+    $(function() {
+        Sitemap.customModal = new Garnish.Modal($('.custom-modal'), {
+            hideOnEsc: false,
+            hideOnShadeClick: false,
+            autoShow: false
+        });
+        Sitemap.itemsToDelete = [];
+        $('.custom-modal .btn.cancel').click(function(){
+            Sitemap.customModal.hide();
+        });
+        $('.custom-modal .btn.submit').click(function(){
+            let url = $('.custom-modal [name=url]').val();
+            let label = $('.custom-modal [name=label]').val();
+            let id = $('.custom-modal [name=id]').val();
+            if (label) {
+                Sitemap.customModal.hide();
+                $('.custom-modal [name=url]').val('');
+                $('.custom-modal [name=label]').val('');
+                $('.custom-modal [name=id]').val('');
+                if (id) {
+                    editCustomItem(id, url, label);
+                } else {
+                    addCustomItem(url, label);
+                }
+            }
+        });
+        initSortable($('.sitemaps .list'));
+        $('#main-form').submit(function(e) {
+            let val = {
+                items: buildItem($('.sitemaps > .list')),
+                delete: Sitemap.itemsToDelete
+            };
+            $('input.sitemap-input').val(JSON.stringify(val));
+        });
+        $('.js-add').click(function (e) {
+            e.preventDefault();
+            Sitemap.customModal.show();
+        });
+        initEditLinks($('.sitemaps .list-item'));
+        initDeleteLinks($('.sitemaps .list-item'));
+    });
+    function buildItem(list) {
+        let arr = [];
+        $.each(list.find('>.list-item'), function (i, item) {
+            item = $(item);
+            arr.push({
+                id: item.data('id'),
+                label: item.data('label'),
+                url: item.data('url'),
+                ignore: item.find('input').is(':checked'),
+                children: buildItem(item.find('>.list'))
+            });
+        });
+        return arr;
+    }
+    function addCustomItem(url, label) {
+        $.ajax({
+            url: '/?action=htmlsitemap/htmlsitemap/create-custom',
+            data: {
+                url: url,
+                label: label
+            }
+        }).done(function (data) {
+            let item = $('.list-item.skeleton').clone().removeClass('skeleton').show().appendTo($('.sitemaps > .list'));
+            item.attr('data-id', data.id);
+            item.find('.ignore label').attr('for', 'ignore-' + data.id);
+            item.find('.ignore input').attr('id', 'ignore-' + data.id);
+            editCustomItem(data.id, url, label);
+            Craft.cp.displayNotice('Custom item has been created');
+        });
+    }
+    function editCustomItem(id, url, label) {
+        let item = $('.sitemaps .list-item[data-id=' + id + ']');
+        item.data('url', url);
+        item.data('label', label);
+        if (url) {
+            item.find('.link').replaceWith('<a class="link" href="'+url+'" target="_blank">'+label+'</a>');
+        } else {
+            item.find('.link').replaceWith('<span class="link">'+label+'</span>');
+        }
+        initDeleteLinks(item);
+        initEditLinks(item);
+        initSortable(item.find('.list'));
+    }
+    function initEditLinks(elems) {
+        elems.find('.js-edit').click(function(e) {
+            e.preventDefault();
+            let item = $(this).closest('.list-item');
+            $('.custom-modal [name=url]').val(item.data('url'));
+            $('.custom-modal [name=label]').val(item.data('label'));
+            $('.custom-modal [name=id]').val(item.data('id'));
+            Sitemap.customModal.show();
+        });
+    }
+    function initDeleteLinks(elems) {
+        elems.find('.js-delete').click(function(e) {
+            e.preventDefault();
+            let item = $(this).closest('.list-item');
+            if (item.find('.list .list-item').length) {
+                Craft.cp.displayError("Can't delete an item that has children");
+            } else {
+                Sitemap.itemsToDelete.push(item.data('id'));
+                item.remove();
+            }
+        });
+    }
+    function initSortable(elems) {
+        $.each(elems, function (i, item) {
+            Sortable.create(item, {
+                group: 'sortable',
+                swapThreshold: 0.65,
+                handle: ".move",
+                animation: 150,
+                fallbackOnBody: true
+            });
+        });
+    }
+{% endjs %}
+{% css %}
+    .list-item {
+        padding: 5px;
+        border-top: 1px solid rgba(51, 64, 77, 0.1);
+        border-left: 1px solid rgba(51, 64, 77, 0.1);
+        border-right: 1px solid rgba(51, 64, 77, 0.1);
+    }
+    .list-item:first-child {
+        border-top-right-radius: 3px;
+        border-top-left-radius: 3px;
+    }
+    .list-item:last-child {
+        border-bottom-right-radius: 3px;
+        border-bottom-left-radius: 3px;
+        border-bottom: 1px solid rgba(51, 64, 77, 0.1);   
+    }
+    .sitemaps > .list .list {
+        margin-left: 20px;
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
+    .ignore {
+        float: right;
+    }
+    .sitemap-header {
+        justify-content: space-between
+    }
+    .custom-modal {
+        max-width: 430px;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+{% endcss %}
